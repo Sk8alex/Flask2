@@ -40,6 +40,7 @@ def generate_new_id():
         return 1
     return quotes[-1]["id"] + 1
 
+
 @app.route("/quotes", methods=['POST'])
 def create_quote():
     data = request.json
@@ -51,6 +52,19 @@ def create_quote():
     }
     quotes.append(new_quote)
     return jsonify(new_quote), 201
+
+
+@app.route("/quotes/<int:id>", methods=['PUT'])
+def edit_quote(id):
+    new_data = request.json
+    for quote in quotes:
+        if quote["id"] == id:
+            if "author" in new_data:
+                quote["author"] = new_data["author"]
+            if "text" in new_data:
+                quote["text"] = new_data["text"]
+            return jsonify(quote), 200
+    return jsonify({"error": "Quote not found"}), 404
 
 
 @app.get("/quotes")
