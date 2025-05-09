@@ -37,18 +37,27 @@ quotes = [
 def get_quotes():
     return jsonify(quotes)
 
+
+@app.get("/params/<value>")
+def get_params(value: str):
+    """Пример динамического urlа"""
+    return jsonify(param=value, value_type=str(type(value))), 200
+
+
 @app.route('/quotes/<int:quote_id>', methods=['GET'])
 def get_quote(quote_id):
     for quote in quotes:
         if quote['id'] == quote_id:
-            return jsonify(quote)
-    return f"Quote with id={id} not found", 404
+            return jsonify(quote), 200
+    # return f"Quote with id={id} not found", 404'
+    return jsonify(error=f"Quote with id={quote_id} not found"), 404
 
 
 @app.route('/quotes/count', methods=['GET'])
 def get_quotes_count():
     count = len(quotes)
     return jsonify({"count": count})
+
 
 @app.route('/quotes/random', methods=['GET'])
 def get_random_quote():
@@ -61,6 +70,8 @@ about_me = {
     "surname": "Мартынов",
     "email": "sk8alex@mail.ru"
 }
+
+
 @app.route("/about")
 def about():
     #return about_me
