@@ -67,6 +67,17 @@ def edit_quote(id):
     return jsonify({"error": "Quote not found"}), 404
 
 
+@app.route("/quotes/<int:id>", methods=['DELETE'])
+def delete(id):
+    """Удаление цитат"""
+    global quotes
+    for i, quote in enumerate(quotes):
+        if quote["id"] == id:
+            del quotes[i]
+            return jsonify({"message": f"Quote with id {id} is deleted."}), 200
+    return jsonify({"error": "Quote not found"}), 404
+
+
 @app.get("/quotes")
 def get_quotes():
     return jsonify(quotes)
