@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import random
 
 app = Flask(__name__)
@@ -33,6 +33,26 @@ quotes = [
     },
 ]
 
+
+def generate_new_id():
+    """Ген id для цитаты"""
+    if not quotes:
+        return 1
+    return quotes[-1]["id"] + 1
+
+@app.route("/quotes", methods=['POST'])
+def create_quote():
+    data = request.json
+    new_id = generate_new_id()
+    new_quote = {
+        "id": new_id,
+        "author": data["author"],
+        "text": data["text"]
+    }
+    quotes.append(new_quote)
+    return jsonify(new_quote), 201
+
+
 @app.get("/quotes")
 def get_quotes():
     return jsonify(quotes)
@@ -54,7 +74,7 @@ def get_quote(quote_id):
 
 
 @app.route('/quotes/count', methods=['GET'])
-def get_quotes_count():
+def get_quotes_count() -> int:
     count = len(quotes)
     return jsonify({"count": count})
 
