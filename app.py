@@ -135,6 +135,21 @@ def about():
     return jsonify(about_me), 200
 
 
+@app.route("/quotes/filter", methods=['GET'])
+def filter_quotes():
+    """Поиск по фильтру"""
+    author = request.args.get('author')
+    rating = request.args.get('rating')
+    filtered_quotes = quotes
+
+    if author:
+        filtered_quotes = [quote for quote in filtered_quotes if quote['author'] == author]
+    if rating:
+        filtered_quotes = [quote for quote in filtered_quotes if str(quote['rating']) == rating]
+
+    return jsonify(filtered_quotes), 200
+
+
 if __name__ == "__main__":
     app.run(debug=True)
 
