@@ -62,8 +62,8 @@ def create_quote():
     return jsonify(new_quote), 201
 
 
-@app.route("/quotesv2", methods=['POST'])
-def create_quotev2():
+@app.route("/quotes_v2", methods=['POST'])
+def create_quote_v2():
     new_quote = request.json
     new_id = generate_new_id()
     new_quote["id"] = new_id
@@ -93,8 +93,8 @@ def edit_quote(id):
     return jsonify({"error": "Quote with id = {quote_id} not found"}), 404
 
 
-@app.route("/quotesv2/<int:quote_id>", methods=['PUT'])
-def edit_quotev2(quote_id):
+@app.route("/quotes_v2/<int:quote_id>", methods=['PUT'])
+def edit_quote_v2(quote_id):
     new_data = request.json
     keys = ('author', 'text', 'rating')
     if not set(new_data.keys()) - set(keys):
@@ -182,8 +182,8 @@ def filter_quotes():
     return jsonify(filtered_quotes), 200
 
 
-@app.route("/quotes/filterv2", methods=['GET'])
-def filter_quotesv2():
+@app.route("/quotes/filter_v2", methods=['GET'])
+def filter_quotes_v2():
     """Поиск по фильтру"""
     filtered_quotes = quotes.copy()
     for key, value in request.args.items():
@@ -192,10 +192,10 @@ def filter_quotesv2():
             return jsonify(error=f'Invalit param={value}'), 400
         if key == 'rating':
             value = int(value)
-        for qoute in filter_quotes:
+        for qoute in filtered_quotes:
             if qoute[key] == value:
                 result.append(qoute)
-        filter_quotes = result.copy()
+        filtered_quotes = result.copy()
 
     return jsonify(filtered_quotes), 200
 
