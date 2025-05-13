@@ -75,6 +75,19 @@ def create_quote_v2():
     return jsonify(new_quote), 201
 
 
+@app.route("/quotes_v3", methods=['POST'])
+def create_quote_v3():
+    new_quote = request.json
+    if not set(new_quote.keys()) - set(KEYS):
+        new_id = generate_new_id()
+        new_quote["id"] = new_id
+        new_quote["rating"] = 1
+        quotes.append(new_quote)
+    else:
+        return jsonify(error="Send bad data to update"), 400
+    return jsonify(new_quote), 201
+
+
 @app.route("/quotes/<int:id>", methods=['PUT'])
 def edit_quote(id):
     new_data = request.json
@@ -107,8 +120,30 @@ def edit_quote_v2(quote_id):
                 return jsonify(quote), 200
 
     else:
-        return jsonify(error="Send bad data"), 200
+        return jsonify(error="Send bad data"), 400
     return jsonify({"error": "Quote not found"}), 404
+
+
+
+
+@app.route("/quotes_v3/<int:quote_id>", methods=['PUT'])
+def edit_quote_v3(quote_id):
+    new_data = request.json
+    if not set(new_data.keys()) - set(KEYS):
+        for quote in quotes:
+            if quote["id"] == quote_id:
+                if "rating" in new_data and new_data["rating"] not in range(1, 6):  # Проверяем корректность рейтинга
+                    new_data.pop('rating')
+
+                quote.update(new_data)
+                return jsonify(quote), 200
+
+    else:
+        return jsonify(error="Send bad data to update"), 400
+    return jsonify({"error": f"Quote with id = {quote_id} not found"}), 404
+
+
+
 
 
 @app.route("/quotes/<int:id>", methods=['DELETE'])
@@ -189,14 +224,13 @@ def filter_quotes_v2():
     for key, value in request.args.items():
         result = []
         if key not in KEYS:
-            return jsonify(error=f'Invalit param={value}'), 400
+            return jsonify(error=f'Invalid param={value}'), 400
         if key == 'rating':
             value = int(value)
         for qoute in filtered_quotes:
             if qoute[key] == value:
                 result.append(qoute)
         filtered_quotes = result.copy()
-
     return jsonify(filtered_quotes), 200
 
 
