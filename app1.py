@@ -9,6 +9,7 @@ def hello_world(): # Это функция-обработчик, которая 
     #return "Hello, World!"
     return jsonify(hello="Hello, Studens!!!"), 200
 
+KEYS = ('author', 'text', 'rating')
 
 quotes = [
     {
@@ -177,6 +178,24 @@ def filter_quotes():
         filtered_quotes = [quote for quote in filtered_quotes if quote['author'] == author]
     if rating:
         filtered_quotes = [quote for quote in filtered_quotes if str(quote['rating']) == rating]
+
+    return jsonify(filtered_quotes), 200
+
+
+@app.route("/quotes/filterv2", methods=['GET'])
+def filter_quotesv2():
+    """Поиск по фильтру"""
+    filtered_quotes = quotes.copy()
+    for key, value in request.args.items():
+        result = []
+        if key not in KEYS:
+            return jsonify(error=f'Invalit param={value}'), 400
+        if key == 'rating':
+            value = int(value)
+        for qoute in filter_quotes:
+            if qoute[key] == value:
+                result.append(qoute)
+        filter_quotes = result.copy()
 
     return jsonify(filtered_quotes), 200
 
