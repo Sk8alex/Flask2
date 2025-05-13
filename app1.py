@@ -61,6 +61,19 @@ def create_quote():
     return jsonify(new_quote), 201
 
 
+@app.route("/quotesv2", methods=['POST'])
+def create_quotev2():
+    new_quote = request.json
+    new_id = generate_new_id()
+    new_quote["id"] = new_id
+    # Каждая новая цитата должна создаваться с одной звездой
+    new_quote["rating"] = new_quote.get("rating", 1)
+    if new_quote["rating"] < 1 or new_quote["rating"] > 5:
+        new_quote["rating"] = 1  # Если некорректный рейтинг(например 10), то оставляем без изменений или устанавливаем значение по умолчанию.
+    quotes.append(new_quote)
+    return jsonify(new_quote), 201
+
+
 @app.route("/quotes/<int:id>", methods=['PUT'])
 def edit_quote(id):
     new_data = request.json
@@ -76,13 +89,31 @@ def edit_quote(id):
                 else:
                     quote["rating"] = quote["rating"]  # Оставляем без изменений, если рейтинг некорректный
             return jsonify(quote), 200
+    return jsonify({"error": "Quote with id = {quote_id} not found"}), 404
+
+
+@app.route("/quotesv2/<int:quote_id>", methods=['PUT'])
+def edit_quotev2(quote_id):
+    new_data = request.json
+    keys = ('author', 'text', 'rating')
+    if not set(new_data.keys()) - set(keys):
+        for quote in quotes:
+            if quote["id"] == quote_id:
+                if "rating" in new_data and new_data["rating"] not in range(1, 6):  # Проверяем корректность рейтинга
+                    new_data.pop('rating')
+
+                quote.update(new_data)
+                return jsonify(quote), 200
+
+    else:
+        return jsonify(error="Send bad data"), 200
     return jsonify({"error": "Quote not found"}), 404
 
 
 @app.route("/quotes/<int:id>", methods=['DELETE'])
-def delete(id):
+def delete_quote(id):
     """Удаление цитат"""
-    global quotes
+ #   global quotes
     for i, quote in enumerate(quotes):
         if quote["id"] == id:
             del quotes[i]
@@ -140,7 +171,7 @@ def filter_quotes():
     """Поиск по фильтру"""
     author = request.args.get('author')
     rating = request.args.get('rating')
-    filtered_quotes = quotes
+    filtered_quotes = quotes[:]
 
     if author:
         filtered_quotes = [quote for quote in filtered_quotes if quote['author'] == author]
