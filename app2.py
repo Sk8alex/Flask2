@@ -14,40 +14,7 @@ app.json.ensure_ascii = False
 
 KEYS = ('author', 'text', 'rating')
 
-# about_me = {
-#    "name": "Вадим",
-#    "surname": "Шиховцов",
-#    "email": "vshihovcov@specialist.ru"
-# }
 
-# quotes = [
-#    {
-#        "id": 1,
-#        "author": "Rick Cook",
-#        "text": "Программирование сегодня — это гонка разработчиков программ, стремящихся писать программы с большей и лучшей идиотоустойчивостью, и вселенной, которая пытается создать больше отборных идиотов. Пока вселенная побеждает.",
-#        "rating": 4
-#    },
-#    {
-#        "id": 5,
-#        "author": "Waldi Ravens",
-#        "text": "Программирование на С похоже на быстрые танцы на только что отполированном полу людей с острыми бритвами в руках.",
-#        "rating": 3
-#    },
-#    {
-#        "id": 6,
-#        "author": "Mosher's Law of Software Engineering",
-#        "text": "Не волнуйтесь, если что-то не работает. Если бы всё работало, вас бы уволили.",
-#        "rating": 4
-#    },
-#    {
-#        "id": 8,
-#        "author": "Yoggi Berra",
-#        "text": "В теории, теория и практика неразделимы. На практике это не так.",
-#        "rating": 2
-       
-#    },
-
-# ]
 
 @app.get("/quotes")
 def get_quotes():
@@ -88,17 +55,6 @@ def get_quote_by_id(quote_id: int):
             return jsonify(quote), 200
     return jsonify(error=f"Quote with id={quote_id} not found"), 404
 
-
-@app.get("/quotes/count")
-def get_quotes_count() -> int:
-    """ Return count of quotes """
-    return {"count": len(quotes)}
-
-
-@app.get("/quotes/random")
-def get_random_quotes():
-    """ Return random quote."""
-    return jsonify(choice(quotes))
 
 
 def generate_new_id():
