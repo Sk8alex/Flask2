@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, g, abort
 from random import choice
 from pathlib import Path
 import sqlite3
@@ -12,8 +12,34 @@ connection = sqlite3.connect(path_to_db)
 app = Flask(__name__)
 app.json.ensure_ascii = False
 
-KEYS = ('author', 'text', 'rating')
+#KEYS = ('author', 'text', 'rating')
+KEYS = ('author', 'text')
 
+
+def make_dicts(cursor, row):
+    """ Create dicts from db results."""
+    return dict((cursor.description[idx][0], value)
+                for idx, value in enumerate(row))
+
+
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(path_to_db)
+    db.row_factory = make_dicts
+    return db
+
+
+def check(data: dict, check_rating=False) -> tuple[bool, dict]:
+    keys = ('author', 'text', 'rating')
+    if check_rating:
+        rating = data.get('rating')    
+        if rating and rating not in range(1, 6):
+            return False, {"error": "Rating must be between 1 and 5"}
+    
+    if set(data.keys()) - set(keys):
+        return False, {"error": "Invalid fields to create/update"}
+    return True, data
 
 
 @app.get("/quotes")
@@ -56,6 +82,54 @@ def get_quote_by_id(quote_id: int):
     return jsonify(error=f"Quote with id={quote_id} not found"), 404
 
 
+# @app.get("/quotes_v2/<int:item_id>")
+# def get_quote_by_id_v2(item_id: int):
+#     select_quotes = "SELECT * from quotes where id={item_id}"
+#     connection = sqlite3.connect("store.db")
+#     cursor = connection.cursor()
+#     cursor.execute(select_quotes)
+#  #   cursor.execute(select_quotes, {"item_id": item_id})
+#     quotes_db = cursor.fetchone() # get list[tuple]
+#     cursor.close()
+#     connection.close()
+#     result = {"id": quotes_db[0], "author": quotes_db[1], "text": quotes_db[2]}
+#     return result, 200
+
+
+# @app.get("/quotes_v2/{item_id}")
+# async def get_quote_by_id_v2(item_id: int):
+#     try:
+#         with sqlite3.connect("store.db") as conn:
+#             cursor = conn.cursor()
+#             cursor.execute("SELECT * FROM quotes WHERE id=?", (item_id,))
+#             quote_data = cursor.fetchone()
+        
+#         if not quote_data:
+#             return {"message": f"Citation with ID {item_id} not found"}, 404
+    
+#         result = {
+#             "id": quote_data[0],
+#             "author": quote_data[1],
+#             "text": quote_data[2]
+#         }
+#         return result, 200
+    
+#     except Exception as e:
+#         print(f"Error fetching citation by ID {item_id}: {e}")
+#         return {"message": "Internal server error"}, 500
+
+
+
+@app.get("/quotes/count")
+def get_quotes_count() -> int:
+    """ Return count of quotes in db."""
+    quantity_select = """SELECT COUNT(*) as count FROM quotes"""
+    cursor = get_db().cursor()
+    count = cursor.execute(quantity_select).fetchone()
+    return jsonify(count), 200
+
+
+
 
 def generate_new_id():
     """Генерирует новый идентификатор для цитаты"""
@@ -71,6 +145,8 @@ def generate_new_id():
         return 1
     else:
         return max_id + 1
+
+
 
 
 @app.route("/quotes", methods=['POST'])
@@ -98,22 +174,52 @@ def create_quote():
         return jsonify(error="Send bad data to create new quote"), 400
 
 
-@app.route("/quotes/<int:id>", methods=['PUT'])
-def edit_quote(id):
-    new_data = request.json
-    for quote in quotes:
-        if quote["id"] == id:
-            if "author" in new_data:
-                quote["author"] = new_data["author"]
-            if "text" in new_data:
-                quote["text"] = new_data["text"]
-            if "rating" in new_data:
-                if 1 <= new_data["rating"] <= 5:  # Проверяем корректность рейтинга
-                    quote["rating"] = new_data["rating"]
-                else:
-                    quote["rating"] = quote["rating"]  # Оставляем без изменений, если рейтинг некорректный
-            return jsonify(quote), 200
-    return jsonify({"error": "Quote not found"}), 404
+@app.post("/quotes_v4")
+def create_quote_v4(): #Версия преподавателя
+    """ Function creates new quote and adds it to db."""
+    if (result := check(request.json))[0]:
+        new_quote = result[1]
+        new_quote["rating"] = 1
+        insert_quote = "INSERT INTO quotes (author, text, rating) VALUES (?, ?, ?)"
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(insert_quote, tuple(new_quote.values()))
+        try:
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            abort(503, f"error: {str(e)}")
+        else:
+            new_quote['id'] = cursor.lastrowid
+            return jsonify(new_quote), 201
+    
+    return jsonify(result[1]), 400
+
+
+@app.put ("/quotes_v3/<int:item_id>")
+def edit_quote_v3(item_id: int):
+    data = request.json
+    if set(data.keys()) - set(KEYS[1:]):
+        return {"message": "Bad Request"}, 400
+
+    select_quotes = f"""
+    UPDATE quotes SET author="{data["author"]}", text="{data["text"]}"
+    WHERE id={item_id}
+    """
+    connection = sqlite3.connect(path_to_db)
+    cursor = connection.cursor()
+    cursor.execute(select_quotes)
+    connection.commit()
+    result = cursor.rowcount
+    cursor.close()
+    connection.close()
+    if result == 0:
+        return jsonify(error=f'Not found quote with id={item_id}')
+    responce, status = get_quote_by_id(item_id)
+    if status == 200:
+        return responce, 200
+    
+
 
 
 @app.route("/quotes/<int:quote_id>", methods=['DELETE'])
