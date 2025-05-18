@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, func
 from sqlalchemy.exc import SQLAlchemyError, InvalidRequestError
 from flask_migrate import Migrate
-from sqlalchemy.orm import relationship
+
 
 class Base(DeclarativeBase):
     pass
@@ -27,21 +27,6 @@ app.config['SQLALCHEMY_ECHO'] = False
 
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
-Migrate = Migrate(app, db)
-
-class AuthorModel(db.Model):
-    __tablename__ = 'authors'
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[int] = mapped_column(String(32), index= True, unique=True)
-    quotes: Mapped[list['QuoteModel']] = relationship( back_populates='author', lazy='dynamic')
-
-def __init__(self, name):
-    self.name = name
-
-
-def to_dict(self):
-    return{"id": self.id, "name": self.name}
 
 
 class QuoteModel(db.Model):
@@ -87,26 +72,7 @@ def check(data: dict, check_rating=False) -> tuple[bool, dict]:
 def handle_exception(e):
     """Функция для перехвата HTTP ошибок и возврата в виде JSON."""
     return jsonify({"error":str(e)}), e.code
-
-#====== Author endpoints =====
-
-@app.post("/authors")
-def create_author():
-    author_data = request.json
-    try:
-        author = AuthorModel(**author_data)
-        db.session.add(author)
-        db.session.commit()
-    except TypeError:
-        abort(400, f'Invalid data. Request <name>. Received: {', '.join(data.keys())}')
-    except Exception as e:
-        abort(503, f'Database error: {str(e)}')
-    
-    return jsonify(author.to_dict()), 201
-
-
-
-#====== Author endpoints =====
+         
 
 @app.get("/quotes")
 def get_quotes():
