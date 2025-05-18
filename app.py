@@ -1,15 +1,15 @@
 from flask import Flask, abort, jsonify, request, g
 from pathlib import Path
 from werkzeug.exceptions import HTTPException
-
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, func
+from sqlalchemy import String, func, ForeignKey
 from sqlalchemy.exc import SQLAlchemyError, InvalidRequestError
 from flask_migrate import Migrate
-from sqlalchemy.orm import relationship
+
+
 
 class Base(DeclarativeBase):
     pass
@@ -27,28 +27,29 @@ app.config['SQLALCHEMY_ECHO'] = False
 
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
-Migrate = Migrate(app, db)
+migrate = Migrate(app, db)
+
 
 class AuthorModel(db.Model):
     __tablename__ = 'authors'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[int] = mapped_column(String(32), index= True, unique=True)
-    quotes: Mapped[list['QuoteModel']] = relationship( back_populates='author', lazy='dynamic')
+    name: Mapped[str] = mapped_column(String(32), index=True, unique=True)
+    quotes: Mapped[list['QuoteModel']] = relationship(back_populates='author', lazy='dynamic')
 
-def __init__(self, name):
-    self.name = name
+    def __init__(self, name):
+        self.name = name
 
-
-def to_dict(self):
-    return{"id": self.id, "name": self.name}
-
+    def to_dict(self):
+        return {"id": self.id, "name": self.name}
+    
 
 class QuoteModel(db.Model):
     __tablename__ = 'quotes'
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    author: Mapped[str] = mapped_column(String(32))
+    author_id: Mapped[str] = mapped_column(ForeignKey('authors.id'))
+    author: Mapped['AuthorModel'] = relationship(back_populates='quotes')
     text: Mapped[str] = mapped_column(String(255))
 
     def __init__(self, author, text):
@@ -56,20 +57,15 @@ class QuoteModel(db.Model):
         self.text  = text
 
     def __repr__(self):
-        return f"Qoute {self.id, self.author}"
+        return f'Quote{self.id, self.author}'  
     
     def to_dict(self):
-        return{
+        return {
             "id": self.id,
-            "author": self.author,
+            "author": self.author.to_dict(),
             "text": self.text
         }
-
-# # ===============================
-# #  Функци-заглушки
-# query_db = get_db = lambda : ...
-# # ===============================
-
+    
 
 def check(data: dict, check_rating=False) -> tuple[bool, dict]:
     keys = ('author', 'text')
@@ -81,37 +77,52 @@ def check(data: dict, check_rating=False) -> tuple[bool, dict]:
     if set(data.keys()) - set(keys):
         return False, {"error": "Invalid fields to create/update"}
     return True, data
-
+         
 
 @app.errorhandler(HTTPException)
 def handle_exception(e):
-    """Функция для перехвата HTTP ошибок и возврата в виде JSON."""
-    return jsonify({"error":str(e)}), e.code
+    """ Функция для перехвата HTTP ошибок и возврата в виде JSON."""
+    return jsonify({"error": str(e)}), e.code
 
-#====== Author endpoints =====
 
+def add_to_db(cls, data):
+    """ Function to work with db layer """
+    try:
+        new_instance = cls(**data)
+        db.session.add(new_instance)
+        db.session.commit()
+    except TypeError:
+        abort(400, f'Invalid data. Required: <name>. Received: {', '.join(data.keys())}')
+    except Exception as e:
+        abort(503, f"Database error: {str(e)}")
+    return jsonify(new_instance.to_dict()), 201
+
+
+# ====== Authors endpoints =======
 @app.post("/authors")
 def create_author():
     author_data = request.json
+    # add_to_db(AuthorModel, author_data)  # Variant 2
     try:
         author = AuthorModel(**author_data)
         db.session.add(author)
         db.session.commit()
     except TypeError:
-        abort(400, f'Invalid data. Request <name>. Received: {', '.join(data.keys())}')
+        abort(400, f'Invalid data. Required: <name>. Received: {', '.join(author_data.keys())}')
     except Exception as e:
-        abort(503, f'Database error: {str(e)}')
-    
+        abort(503, f"Database error: {str(e)}")
     return jsonify(author.to_dict()), 201
 
 
+# URL: "/authors/<int:author_id>/quotes"
 
-#====== Author endpoints =====
 
+# ====== Quotes endpoints =======
 @app.get("/quotes")
 def get_quotes():
     """ Функция возвращает все цитаты из БД. """
     quotes_db = db.session.scalars(db.select(QuoteModel)).all()
+    # Формируем список словарей
     quotes = []
     for quote in quotes_db:
         quotes.append(quote.to_dict())
@@ -121,8 +132,9 @@ def get_quotes():
 @app.get("/quotes/<int:quote_id>")
 def get_quote_by_id(quote_id: int):
     """ Return quote by id from db."""
-    quote = db.get_or_404(QuoteModel, quote_id, description=f"Quote with id={quote_id} not found")
+    quote = db.get_or_404(entity=QuoteModel, ident=quote_id, description=f"Quote with id={quote_id} not found")
     return jsonify(quote.to_dict()), 200
+
 
 
 @app.get("/quotes/count")
@@ -141,56 +153,57 @@ def create_quote():
         db.session.add(quote)
         db.session.commit()
     except TypeError:
-        return jsonify(error=f'Invalid data.Request: Author and text. Received: {', '.join(data.keys())}'), 400
+        abort(400, f'Invalid data. Required: <author> and <text>. Received: {', '.join(data.keys())}')
     except Exception as e:
-        abort(503, f'Database error: {str(e)}')
+        abort(503, f"Database error: {str(e)}")
     
-    return jsonify(quote.to_dict()), 400
+    return jsonify(quote.to_dict()), 201
     
 
 
 @app.put("/quotes/<int:quote_id>")
 def edit_quote(quote_id: int):
-    """Update an existing quote"""
+    """ Update an existing quote """
     new_data = request.json
     result = check(new_data, check_rating=True)
     if not result[0]:
         return abort(400, result[1].get('error'))
     
-    quote = db.get_or_404(QuoteModel, quote_id, description=f"Quote with id={quote_id} not found")
-    
+    quote = db.get_or_404(entity=QuoteModel, ident=quote_id, description=f"Quote with id={quote_id} not found")
+
     try:
         for key_as_attr, value in new_data.items():
             setattr(quote, key_as_attr, value)
 
         db.session.commit()
-        return jsonify(quote.to_dict()),200
+        return jsonify(quote.to_dict()), 200
     except SQLAlchemyError as e:
         db.session.rollback()
-        abort(503, f"error: {str(e)}")
+        abort(503, f"Database error: {str(e)}")
 
 
 @app.route("/quotes/<int:quote_id>", methods=['DELETE'])
 def delete_quote(quote_id):
     """Delete quote by id """
-    quote = db.get_or_404(QuoteModel, quote_id, description=f"Quote with id={quote_id} not found")
+    quote = db.get_or_404(entity=QuoteModel, ident=quote_id, description=f"Quote with id={quote_id} not found")
     db.session.delete(quote)
     try:
         db.session.commit()
         return jsonify({"message": f"Quote with id {quote_id} has deleted."}), 200
     except SQLAlchemyError as e:
         db.session.rollback()
-        abort(503, f"error: {str(e)}")
-
-
-
+        abort(503, f"Database error: {str(e)}")
+    
+    
 @app.route("/quotes/filter", methods=['GET'])
 def filter_quotes():
-    data = request.args
+    data = request.args # get query parameters from URL
     try:
-        quotes = db.session.scalars(db.select(QuoteModel).filter_by(*data)).all()
+        quotes = db.session.scalars(db.select(QuoteModel).filter_by(**data)).all()
     except InvalidRequestError:
-        abort(400, f'Invalid data. Required: <author> and <text>')
+        abort(400, f'Invalid data. Required: <author> and <text>. Received: {', '.join(data.keys())}')
+    
+    return jsonify([quote.to_dict() for quote in quotes]), 200
 
 
 if __name__ == "__main__":
